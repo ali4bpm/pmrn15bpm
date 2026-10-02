@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Administrative productivity writes must use server functions protected by the encrypted shared-password session, because the password must never ship to the browser.

@@ -78,17 +78,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Produtividade 10ª CIPM" },
+      { title: "Produtividade 15º BPM PMRN" },
       {
         name: "description",
         content:
-          "Painel de produtividade operacional da 10ª Companhia Independente de Polícia Militar.",
+          "Painel de produtividade operacional do 15º Batalhão de Polícia Militar do Rio Grande do Norte.",
       },
-      { property: "og:title", content: "Produtividade 10ª CIPM" },
+      { property: "og:title", content: "Produtividade 15º BPM PMRN" },
       {
         property: "og:description",
         content:
-          "Painel de produtividade operacional da 10ª Companhia Independente de Polícia Militar.",
+          "Painel de produtividade operacional do 15º Batalhão de Polícia Militar do Rio Grande do Norte.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -115,7 +115,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="pt-BR">
       <head>
         <HeadContent />
       </head>
