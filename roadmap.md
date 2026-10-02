@@ -1,0 +1,7 @@
+# Roadmap
+
+- [x] Aplicar pontuação fixa para as faixas de entorpecentes.
+- [x] Calcular a faixa de munição pela quantidade informada manualmente.
+- [x] Adicionar edição e exclusão administrativas.
+- [x] Alterar o painel para modo claro com brasão desbotado ao fundo.
+- [ ] Validar a experiência autenticada quando a conta administrativa estiver disponível.
