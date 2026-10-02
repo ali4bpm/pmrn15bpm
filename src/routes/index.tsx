@@ -1,21 +1,22 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { PanelLeftClose, PanelLeftOpen, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { Session } from "@supabase/supabase-js";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, LabelList } from "recharts";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { supabase } from "@/integrations/supabase/client";
-import brasao from "@/assets/brasao.jpeg.asset.json";
+import brasao from "@/assets/brasao-15-bpm.png.asset.json";
 import { Button } from "@/components/ui/button";
+import { deleteProductivityRow, getAdminGateStatus, saveProductivityRows, unlockAdminData } from "@/lib/admin-gate.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Produtividade e Pontuação 10ª CIPM RN" },
-      { name: "description", content: "Painel de produtividade e pontuação do efetivo da 10ª CIPM RN: registros, ranking, distribuição por pelotão e relatórios em PDF." },
-      { property: "og:title", content: "Produtividade e Pontuação 10ª CIPM RN" },
-      { property: "og:description", content: "Ranking de produtividade, distribuição por pelotão e relatórios da 10ª CIPM RN." },
+      { title: "Produtividade e Pontuação 15º BPM PMRN" },
+      { name: "description", content: "Painel de produtividade e pontuação do efetivo do 15º BPM PMRN: registros, ranking, distribuição por companhias e relatórios em PDF." },
+      { property: "og:title", content: "Produtividade e Pontuação 15º BPM PMRN" },
+      { property: "og:description", content: "Ranking de produtividade, distribuição por companhias e relatórios do 15º BPM PMRN." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -23,7 +24,6 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-const ADMIN_EMAIL = "pmrncipm@gmail.com";
 const OCORRENCIAS: [string, number][] = [
   ["ARMA BRANCA (Homicídio, Tentativa de homicídio com Lesão Corporal Grave e Roubo consumado)", 5],
   ["ARTESANAL CURTA", 20],
@@ -77,12 +77,12 @@ const calcularPontos = (tipo: string, qtde: number) => {
 };
 const MESES = ["Todos", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const CORES = ["var(--primary)", "var(--accent)", "var(--destructive)", "#3949ab", "#2e7d32", "#c9a227", "#6b7280"];
-const PELOTOES = ["1º Pelotão", "2º Pelotão", "3º Pelotão"];
+const COMPANHIAS = ["1ª CPM/Sede Santa Cruz", "2ª CPM/Sede Tangará", "3ª CPM/Sede Santa Cruz"];
 const subdivOf = (p: string) => SUBDIVISOES[p] ?? [];
 const SUBDIVISOES: Record<string, string[]> = {
-  "1º Pelotão": ["Canguaretama", "Destacamento de Vila Flor"],
-  "2º Pelotão": ["Pedro Velho", "Destacamento de Montanhas"],
-  "3º Pelotão": ["Baía Formosa"],
+  "1ª CPM/Sede Santa Cruz": ["1º Pelotão — Santa Cruz", "DPM de Campo Redondo", "DPM de Lajes Pintadas"],
+  "2ª CPM/Sede Tangará": ["1º Pelotão — Tangará", "DPM de Sítio Novo", "DPM de Serra Caiada", "DPM de Boa Saúde", "DPM de Sen. Elói de Souza"],
+  "3ª CPM/Sede Santa Cruz": ["1º Pelotão — Jaçanã", "DPM de Cel. Ezequiel", "DPM de Japi", "DPM de São Bento do Trairi"],
 };
 
 const normEfetivo = (s: string) => s.trim().replace(/\s+/g, " ").replace(/°/g, "º").toLocaleUpperCase("pt-BR");
@@ -92,7 +92,7 @@ const uniq = (a: string[]) => Array.from(new Set(a)).sort((x, y) => x.localeComp
 
 function gerarPdf(titulo: string, sub: string, head: string[], body: (string | number)[][], arquivo: string) {
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-  doc.setFontSize(16); doc.text("10ª CIPMRN", 148, 14, { align: "center" });
+  doc.setFontSize(16); doc.text("15º BPM PMRN", 148, 14, { align: "center" });
   doc.setFontSize(12); doc.text(titulo, 10, 24);
   doc.setFontSize(9); doc.text(sub, 10, 30);
   autoTable(doc, {
@@ -100,7 +100,7 @@ function gerarPdf(titulo: string, sub: string, head: string[], body: (string | n
     styles: { fontSize: 7.5 }, headStyles: { fillColor: [57, 73, 171] }, alternateRowStyles: { fillColor: [243, 244, 246] },
   });
   const y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
-  doc.text("10ª CIPMRN - PMRN", 10, y);
+  doc.text("15º BPM - PMRN", 10, y);
   doc.save(arquivo);
 }
 
@@ -134,11 +134,13 @@ function MultiCheck({ label, options, selected, onChange }: { label: string; opt
 function Index() {
   const [rows, setRows] = useState<Row[]>([]);
   const [erro, setErro] = useState<string | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [f, setF] = useState({ ano: "Todos", mes: "Todos", pelotao: "Todos", localidade: "Todos", efetivo: [] as string[], efetivoTexto: "", tipo: [] as string[] });
   const [asideOpen, setAsideOpen] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editando, setEditando] = useState<Row | null>(null);
+  const gateStatus = useServerFn(getAdminGateStatus);
+  const deleteRow = useServerFn(deleteProductivityRow);
 
   const carregar = async () => {
       const { data, error } = await supabase.from("produtividade").select("id,data,pelotao,localidade,efetivo,tipo_oc,qtde,pontos").order("data", { ascending: false });
@@ -146,26 +148,19 @@ function Index() {
   };
   useEffect(() => {
     carregar();
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: sub } = supabase.auth.onAuthStateChange((e, s) => {
-      setSession(s);
-      if (e === "SIGNED_IN" || e === "SIGNED_OUT") setTimeout(carregar, 0);
-    });
-    return () => sub.subscription.unsubscribe();
+    gateStatus().then(({ unlocked }) => setIsAdmin(unlocked)).catch(() => setIsAdmin(false));
   }, []);
-  const isAdmin = session?.user.email?.toLowerCase() === ADMIN_EMAIL;
   const abrirInclusao = () => { setEditando(null); setModalOpen(true); };
   const fecharModal = () => { setModalOpen(false); void carregar(); };
   const abrirEdicao = (row: Row) => { setEditando(row); setModalOpen(true); };
   const excluir = async (row: Row) => {
     if (!window.confirm(`Excluir o registro de ${row.efetivo} em ${fmtData(row.data)}?`)) return;
-    const { error } = await supabase.from("produtividade").delete().eq("id", row.id);
-    if (error) setErro(`Não foi possível excluir o registro: ${error.message}`);
-    else await carregar();
+    try { await deleteRow({ data: { id: row.id } }); await carregar(); }
+    catch (error) { setErro(`Não foi possível excluir o registro: ${error instanceof Error ? error.message : "erro inesperado"}`); }
   };
 
   const anos = uniq(rows.map((r) => r.data.slice(0, 4))).reverse();
-  const pelotoes = uniq([...PELOTOES, ...rows.map((r) => r.pelotao)]);
+  const pelotoes = uniq([...COMPANHIAS, ...rows.map((r) => r.pelotao)]);
   const localidades = uniq(rows.map((r) => r.localidade ?? "").filter(Boolean));
   const efetivos = uniq(rows.map((r) => normEfetivo(r.efetivo)));
   const tipos = rows.length ? uniq(rows.map((r) => r.tipo_oc)) : OCORRENCIAS.map((o) => o[0]);
@@ -194,7 +189,7 @@ function Index() {
       c.qtde += Number(r.qtde) || 0; c.pontos += Number(r.pontos) || 0; m.set(loc, c);
     });
     const total = [...m.values()].reduce((a, b) => a + b.qtde, 0) || 1;
-    return PELOTOES.flatMap((p) =>
+    return COMPANHIAS.flatMap((p) =>
       subdivOf(p)
         .filter((s) => m.has(s))
         .map((s) => ({ name: s, pelotao: p, value: m.get(s)!.qtde, qtde: m.get(s)!.qtde, pontos: m.get(s)!.pontos, pct: (m.get(s)!.qtde / total) * 100 })),
@@ -214,7 +209,7 @@ function Index() {
       .sort((a, b) => b.pontos - a.pontos || b.qtde - a.qtde);
   }, [df]);
 
-  const filtroTxt = `Ano: ${f.ano} | Mês: ${f.mes} | Pelotão: ${f.pelotao} | DESTACAMENTO: ${f.localidade} | Efetivo: ${f.efetivoTexto.trim() ? f.efetivoTexto : f.efetivo.length ? f.efetivo.join(", ") : "Todos"} | Tipo de OC: ${f.tipo.length ? f.tipo.join(", ") : "Todos"}`;
+  const filtroTxt = `Ano: ${f.ano} | Mês: ${f.mes} | Companhia: ${f.pelotao} | Subdivisão: ${f.localidade} | Efetivo: ${f.efetivoTexto.trim() ? f.efetivoTexto : f.efetivo.length ? f.efetivo.join(", ") : "Todos"} | Tipo de OC: ${f.tipo.length ? f.tipo.join(", ") : "Todos"}`;
   const limparFiltros = () => setF({ ano: "Todos", mes: "Todos", pelotao: "Todos", localidade: "Todos", efetivo: [], efetivoTexto: "", tipo: [] });
   const sel = (label: string, key: keyof typeof f, opts: string[]) => (
     <label className="block text-xs font-medium text-muted-foreground">
@@ -230,14 +225,14 @@ function Index() {
       <img src={brasao.url} alt="" aria-hidden="true" className="pointer-events-none fixed left-1/2 top-1/2 z-0 w-[min(72vw,680px)] -translate-x-1/2 -translate-y-1/2 opacity-[0.16]" />
       {asideOpen && (
       <aside className="border-b bg-card p-5 lg:sticky lg:top-0 lg:h-screen lg:w-72 lg:shrink-0 lg:overflow-y-auto lg:border-b-0 lg:border-r">
-        <p className="text-center text-xl font-extrabold">10ª CIPMRN</p>
-        <img src={brasao.url} alt="Brasão da 10ª CIPM" className="mx-auto my-4 max-h-56 object-contain" />
+        <p className="text-center text-xl font-extrabold">15º BPM PMRN</p>
+        <img src={brasao.url} alt="Brasão do 15º BPM" className="mx-auto my-4 max-h-56 object-contain" />
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider">Filtros</h2>
         <div className="space-y-3">
           {sel("Ano", "ano", anos)}
           {sel("Mês", "mes", MESES)}
-          {sel("Pelotão", "pelotao", pelotoes)}
-          {sel("DESTACAMENTO", "localidade", localidades)}
+          {sel("Companhias", "pelotao", pelotoes)}
+          {sel("Subdivisão", "localidade", localidades)}
           <label className="block text-xs font-medium text-muted-foreground">
             Efetivo
             <input className={`${inputCls} mt-1 text-foreground`} placeholder="Todos" value={f.efetivoTexto}
@@ -266,11 +261,11 @@ function Index() {
           </Button>
         </div>
         <main className="mx-auto w-full max-w-6xl space-y-6 p-5 lg:p-8">
-        <h1 className="text-center text-3xl font-extrabold">Produtividade e Pontuação 10ª CIPM RN</h1>
+        <h1 className="text-center text-3xl font-extrabold">Produtividade e Pontuação 15º BPM PMRN</h1>
 
         <details className="rounded-lg border bg-card p-4">
           <summary className="cursor-pointer font-semibold">Sobre o Aplicativo</summary>
-          <p className="mt-3 text-sm">Este aplicativo foi desenvolvido para mostrar a produtividade e pontuação do efetivo do 10ª CIPM - PMRN, baseado nas Categorias, Critérios e Pontos elencados abaixo:</p>
+          <p className="mt-3 text-sm">Este aplicativo foi desenvolvido para mostrar a produtividade e pontuação do efetivo do 15º BPM - PMRN, baseado nas Categorias, Critérios e Pontos elencados abaixo:</p>
           <ul className="mt-2 space-y-1 text-sm">
             {OCORRENCIAS.map(([n, p]) => <li key={n}>{n}: {String(p).padStart(2, "0")} pontos</li>)}
           </ul>
@@ -283,7 +278,7 @@ function Index() {
           <div className="thin-scrollbar max-h-96 overflow-auto rounded-md border border-border/60">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-card text-left text-xs uppercase text-muted-foreground">
-                <tr>{["Data", "Pelotão", "DESTACAMENTO", "Efetivo", "Tipo de OC", "Qtde", "Pontos"].map((h) => <th key={h} className="border-b p-2">{h}</th>)}</tr>
+                <tr>{["Data", "Companhia", "Subdivisão", "Efetivo", "Tipo de OC", "Qtde", "Pontos"].map((h) => <th key={h} className="border-b p-2">{h}</th>)}</tr>
               </thead>
               <tbody>
                 {df.map((r) => (
@@ -297,14 +292,14 @@ function Index() {
             </table>
           </div>
           <button className="mt-4 w-full rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
-            onClick={() => gerarPdf("Resumo - Tipos filtrados", filtroTxt, ["Data", "Pelotão", "DESTACAMENTO", "Efetivo", "Tipo de OC", "Qtde", "Pontos"],
-              df.map((r) => [fmtData(r.data), r.pelotao, r.localidade ?? "—", r.efetivo, r.tipo_oc, r.qtde, r.pontos]), "resumo_10_cipm.pdf")}>
+            onClick={() => gerarPdf("Resumo - Tipos filtrados", filtroTxt, ["Data", "Companhia", "Subdivisão", "Efetivo", "Tipo de OC", "Qtde", "Pontos"],
+              df.map((r) => [fmtData(r.data), r.pelotao, r.localidade ?? "—", r.efetivo, r.tipo_oc, r.qtde, r.pontos]), "resumo_15_bpm.pdf")}>
             Download em PDF - Resumo
           </button>
         </section>
 
         <section className="rounded-lg border bg-card p-4">
-          <h2 className="mb-3 text-center text-lg font-semibold">Distribuição de Ocorrências por Pelotão</h2>
+          <h2 className="mb-3 text-center text-lg font-semibold">Distribuição de Ocorrências por Companhia</h2>
           {dist.length ? (
             <div className="mx-auto w-full max-w-2xl">
               <div className="h-72">
@@ -319,15 +314,15 @@ function Index() {
                 </ResponsiveContainer>
               </div>
               <table className="mt-4 w-full text-center text-sm">
-                <thead className="text-xs uppercase text-muted-foreground"><tr><th className="border-b p-2">Pelotão</th><th className="border-b p-2">Qtde</th><th className="border-b p-2">Porcentagem de Ocorrências</th></tr></thead>
+                <thead className="text-xs uppercase text-muted-foreground"><tr><th className="border-b p-2">Companhia</th><th className="border-b p-2">Qtde</th><th className="border-b p-2">Porcentagem de Ocorrências</th></tr></thead>
                 <tbody>{dist.map((d) => <tr key={d.name}><td className="p-2">{d.name}</td><td className="p-2">{d.qtde}</td><td className="p-2">{d.pct.toFixed(2)}%</td></tr>)}</tbody>
               </table>
             </div>
-          ) : <p className="text-sm text-muted-foreground">Sem dados para a distribuição por Pelotão.</p>}
+          ) : <p className="text-sm text-muted-foreground">Sem dados para a distribuição por Companhia.</p>}
 
           {distLoc.length > 0 && (
             <div className="mt-6 border-t pt-4">
-              <h3 className="mb-3 text-center text-base font-semibold">Distribuição de Ocorrências por Subdivisão de Pelotão</h3>
+              <h3 className="mb-3 text-center text-base font-semibold">Distribuição de Ocorrências por Subdivisão</h3>
               <div className="mx-auto w-full max-w-3xl">
                 <div className="h-72">
                   <ResponsiveContainer>
@@ -341,7 +336,7 @@ function Index() {
                 </div>
                 <table className="mt-4 w-full text-center text-sm">
                   <thead className="text-xs uppercase text-muted-foreground">
-                    <tr><th className="border-b p-2">Pelotão</th><th className="border-b p-2">Subdivisão</th><th className="border-b p-2">Qtde</th><th className="border-b p-2">Porcentagem de Ocorrências</th></tr>
+                    <tr><th className="border-b p-2">Companhia</th><th className="border-b p-2">Subdivisão</th><th className="border-b p-2">Qtde</th><th className="border-b p-2">Porcentagem de Ocorrências</th></tr>
                   </thead>
                   <tbody>
                     {distLoc.map((d) => (
@@ -362,7 +357,7 @@ function Index() {
           <div className="max-h-96 overflow-auto rounded-md border border-border/60 thin-scrollbar">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-card text-left text-xs uppercase text-muted-foreground">
-                <tr>{["#", "Efetivo", "Pelotão", "DESTACAMENTO", "Qtde", "Pontos"].map((h) => <th key={h} className="border-b p-2">{h}</th>)}</tr>
+                <tr>{["#", "Efetivo", "Companhia", "Subdivisão", "Qtde", "Pontos"].map((h) => <th key={h} className="border-b p-2">{h}</th>)}</tr>
               </thead>
               <tbody>
                 {ranking.map((r, i) => (
@@ -376,8 +371,8 @@ function Index() {
             </table>
           </div>
           <button className="mt-4 w-full rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
-            onClick={() => gerarPdf("Ranking de Produtividade", filtroTxt, ["Efetivo", "Pelotão", "DESTACAMENTO", "Qtde", "Pontos"],
-              ranking.map((r) => [r.efetivo, r.pelotao, r.localidade, r.qtde, r.pontos]), "ranking_produtividade_10_cipm.pdf")}>
+            onClick={() => gerarPdf("Ranking de Produtividade", filtroTxt, ["Efetivo", "Companhia", "Subdivisão", "Qtde", "Pontos"],
+              ranking.map((r) => [r.efetivo, r.pelotao, r.localidade, r.qtde, r.pontos]), "ranking_produtividade_15_bpm.pdf")}>
             Download em PDF - Ranking
           </button>
         </section>
@@ -404,7 +399,7 @@ function Index() {
           ) : <p className="text-sm text-muted-foreground">Sem dados para o gráfico de produtividade.</p>}
         </section>
 
-        <footer className="pt-6 text-center text-sm text-muted-foreground">Aplicativo desenvolvido para 10ª CIPMRN - PMRN</footer>
+        <footer className="pt-6 text-center text-sm text-muted-foreground">Aplicativo desenvolvido para o 15º BPM - PMRN</footer>
         </main>
       </div>
 
@@ -442,10 +437,7 @@ function Index() {
                   </table>
                 </div>
               </>
-            ) : session ? (
-              <p className="text-sm text-destructive">Esta conta não tem permissão para incluir registros.
-                <button className="ml-2 underline" onClick={() => supabase.auth.signOut()}>Sair</button></p>
-            ) : <Login />}
+            ) : <Login onUnlocked={() => setIsAdmin(true)} />}
           </div>
         </div>
       )}
@@ -453,40 +445,38 @@ function Index() {
   );
 }
 
-function Login() {
-  const [email, setEmail] = useState(ADMIN_EMAIL);
+function Login({ onUnlocked }: { onUnlocked: () => void }) {
   const [senha, setSenha] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
+  const unlock = useServerFn(unlockAdminData);
   const entrar = async () => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
-    setMsg(error ? "Usuário ou senha inválidos." : null);
-  };
-  const criar = async () => {
-    const { error } = await supabase.auth.signUp({ email, password: senha, options: { emailRedirectTo: window.location.origin } });
-    setMsg(error ? error.message : "Conta criada. Confirme pelo link enviado ao e-mail e depois entre.");
+    try {
+      const result = await unlock({ data: { password: senha } });
+      if (result.ok) onUnlocked(); else setMsg("Senha inválida.");
+    } catch { setMsg("Não foi possível validar a senha."); }
   };
   return (
     <div className="mx-auto max-w-md space-y-3">
-      <input className={inputCls} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Usuário (e-mail)" />
-      <input className={inputCls} type="password" value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="Senha" />
-      <div className="flex gap-2">
-        <button className="flex-1 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground" onClick={entrar}>Entrar</button>
-        <button className="rounded-md border px-4 py-2 text-sm" onClick={criar}>Primeiro acesso</button>
-      </div>
+      <label className="block text-xs font-medium text-muted-foreground">Senha de acesso
+        <input className={`${inputCls} mt-1`} type="password" value={senha} onChange={(e) => setSenha(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void entrar(); }} placeholder="Digite a senha" autoFocus />
+      </label>
+      <Button className="w-full" onClick={entrar}>Entrar</Button>
       {msg && <p className="text-sm text-muted-foreground">{msg}</p>}
     </div>
   );
 }
 
 function FormInclusao({ registro, onSaved }: { registro: Row | null; onSaved: () => void | Promise<void> }) {
+  const defaultCompanhia = COMPANHIAS[0] ?? "";
   const [data, setData] = useState(registro?.data ?? new Date().toISOString().slice(0, 10));
-  const [pelotao, setPelotao] = useState<string>(registro?.pelotao ?? "1º Pelotão");
-  const [localidade, setLocalidade] = useState<string>(registro?.localidade ?? subdivOf(registro?.pelotao ?? "1º Pelotão")[0] ?? "");
+  const [pelotao, setPelotao] = useState<string>(registro?.pelotao ?? defaultCompanhia);
+  const [localidade, setLocalidade] = useState<string>(registro?.localidade ?? subdivOf(registro?.pelotao ?? defaultCompanhia)[0] ?? "");
   const [efetivo, setEfetivo] = useState(registro?.efetivo ?? "");
   const [tiposSel, setTiposSel] = useState<string[]>(registro ? [registro.tipo_oc] : []);
   const [qtde, setQtde] = useState(registro && !ENTORPECENTES_QTDE[registro.tipo_oc] && !isMunicao(registro.tipo_oc) ? registro.qtde : 1);
   const [municoes, setMunicoes] = useState(registro && isMunicao(registro.tipo_oc) ? (MUNICAO_MIN[registro.tipo_oc] ?? 1) : 1);
   const [msg, setMsg] = useState<string | null>(null);
+  const saveRows = useServerFn(saveProductivityRows);
   const temMunicao = tiposSel.some(isMunicao);
   const comum = tiposSel.filter((t) => !isMunicao(t) && !ENTORPECENTES_QTDE[t]);
   const soEntorpecente = tiposSel.length > 0 && comum.length === 0 && !temMunicao;
@@ -508,22 +498,19 @@ function FormInclusao({ registro, onSaved }: { registro: Row | null; onSaved: ()
       qtde: isMunicao(t) || ENTORPECENTES_QTDE[t] ? 1 : qtde,
       pontos: calcularPontos(t, isMunicao(t) ? municoes : qtde),
     }));
-    const { error } = registro && linhas.length
-      ? await supabase.from("produtividade").update(linhas[0]!).eq("id", registro.id)
-      : await supabase.from("produtividade").insert(linhas);
-    if (error) setMsg(`Não foi possível salvar o registro: ${error.message}`);
-    else await onSaved();
+    try { await saveRows({ data: { id: registro?.id ?? null, rows: linhas } }); await onSaved(); }
+    catch (error) { setMsg(`Não foi possível salvar o registro: ${error instanceof Error ? error.message : "erro inesperado"}`); }
   };
   return (
     <div className="space-y-4">
       <p className="text-sm text-primary">Usuário autenticado. Você pode adicionar registros.</p>
       <div className="grid gap-3 md:grid-cols-3">
         <label className="text-xs">Data<input type="date" className={`${inputCls} mt-1`} value={data} onChange={(e) => setData(e.target.value)} /></label>
-        <label className="text-xs">Pelotão
+        <label className="text-xs">Companhia
           <select className={`${inputCls} mt-1`} value={pelotao} onChange={(e) => trocarPelotao(e.target.value)}>
-            {PELOTOES.map((p) => <option key={p}>{p}</option>)}
+            {COMPANHIAS.map((p) => <option key={p}>{p}</option>)}
           </select></label>
-        <label className="text-xs">DESTACAMENTO
+        <label className="text-xs">Subdivisão
           <select className={`${inputCls} mt-1`} value={localidade} onChange={(e) => setLocalidade(e.target.value)}>
             {subdivOf(pelotao).map((l) => <option key={l}>{l}</option>)}
           </select></label>
