@@ -61,8 +61,10 @@ export const saveProductivityRows = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await requireUnlocked();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const firstRow = data.rows[0];
+    if (!firstRow) throw new Error("Nenhum registro informado");
     const result = data.id
-      ? await supabaseAdmin.from("produtividade").update(data.rows[0]).eq("id", data.id)
+      ? await supabaseAdmin.from("produtividade").update(firstRow).eq("id", data.id)
       : await supabaseAdmin.from("produtividade").insert(data.rows);
     if (result.error) throw new Error(result.error.message);
     return { ok: true as const };

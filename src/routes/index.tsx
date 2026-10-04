@@ -224,7 +224,7 @@ function Index() {
     <div className="relative min-h-screen bg-background text-foreground lg:flex">
       <img src={brasao.url} alt="" aria-hidden="true" className="pointer-events-none fixed left-1/2 top-1/2 z-0 w-[min(72vw,680px)] -translate-x-1/2 -translate-y-1/2 opacity-[0.16]" />
       {asideOpen && (
-      <aside className="border-b bg-card p-5 lg:sticky lg:top-0 lg:h-screen lg:w-72 lg:shrink-0 lg:overflow-y-auto lg:border-b-0 lg:border-r">
+      <aside className="relative z-[1] border-b bg-card p-5 lg:sticky lg:top-0 lg:h-screen lg:w-72 lg:shrink-0 lg:overflow-y-auto lg:border-b-0 lg:border-r">
         <p className="text-center text-xl font-extrabold">15º BPM PMRN</p>
         <img src={brasao.url} alt="Brasão do 15º BPM" className="mx-auto my-4 max-h-56 object-contain" />
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider">Filtros</h2>
