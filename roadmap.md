@@ -8,4 +8,4 @@
 - [x] Atualizar a identidade visual e os textos para o 15º BPM PMRN.
 - [x] Organizar companhias, pelotões e DPMs conforme o organograma oficial.
 - [x] Proteger “Adicionar dados” com senha validada no servidor.
-- [ ] Confirmar que o painel está conectado ao banco de dados deste projeto.
+- [x] Confirmar que o painel está conectado ao banco de dados deste projeto.
