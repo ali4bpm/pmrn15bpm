@@ -10,3 +10,4 @@
 <!-- LOVABLE:END -->
 
 - Administrative productivity writes must use server functions protected by the encrypted shared-password session, because the password must never ship to the browser.
+- External Supabase deployments use `supabase/external-schema.sql` as the canonical empty schema, because the managed Lovable Cloud connection remains platform-controlled.
