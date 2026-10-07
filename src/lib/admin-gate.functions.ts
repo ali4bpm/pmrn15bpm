@@ -1,7 +1,18 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { useSession } from "@tanstack/react-start/server";
+import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
+
+const EXTERNAL_SUPABASE_URL = "https://hhkhpjgwtbradxblmiyp.supabase.co";
+
+function externalAdmin() {
+  const serviceKey = process.env["EXTERNAL_SUPABASE_SERVICE_ROLE_KEY"];
+  if (!serviceKey) throw new Error("EXTERNAL_SUPABASE_SERVICE_ROLE_KEY não configurado");
+  return createClient(EXTERNAL_SUPABASE_URL, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
 
 const sessionName = "admin-data-gate";
 const maxAge = 60 * 60 * 8;
@@ -60,7 +71,7 @@ export const saveProductivityRows = createServerFn({ method: "POST" })
   .inputValidator((data) => z.object({ id: z.number().int().positive().nullable(), rows: z.array(rowSchema).min(1).max(40) }).parse(data))
   .handler(async ({ data }) => {
     await requireUnlocked();
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = externalAdmin();
     const firstRow = data.rows[0];
     if (!firstRow) throw new Error("Nenhum registro informado");
     const result = data.id
@@ -74,7 +85,7 @@ export const deleteProductivityRow = createServerFn({ method: "POST" })
   .inputValidator((data) => z.object({ id: z.number().int().positive() }).parse(data))
   .handler(async ({ data }) => {
     await requireUnlocked();
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = externalAdmin();
     const { error } = await supabaseAdmin.from("produtividade").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true as const };

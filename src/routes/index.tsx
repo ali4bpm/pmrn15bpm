@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, LabelList } from "recharts";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/external-client";
 import brasao from "@/assets/brasao-15-bpm.png.asset.json";
 import { Button } from "@/components/ui/button";
 import { deleteProductivityRow, getAdminGateStatus, saveProductivityRows, unlockAdminData } from "@/lib/admin-gate.functions";
