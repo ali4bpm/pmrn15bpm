@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { PanelLeftClose, PanelLeftOpen, Pencil, Plus, Trash2, X } from "lucide-react";
+import { LogOut, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, LabelList } from "recharts";
 import { jsPDF } from "jspdf";
@@ -152,13 +152,14 @@ function Index() {
     carregar();
     gateStatus({ data: { token: getToken() } }).then(({ unlocked }) => setIsAdmin(unlocked)).catch(() => setIsAdmin(false));
   }, []);
+  const sair = () => { window.sessionStorage.removeItem(TOKEN_KEY); setIsAdmin(false); };
   const abrirInclusao = () => { setEditando(null); setModalOpen(true); };
   const fecharModal = () => { setModalOpen(false); void carregar(); };
   const abrirEdicao = (row: Row) => { setEditando(row); setModalOpen(true); };
   const excluir = async (row: Row) => {
     if (!window.confirm(`Excluir o registro de ${row.efetivo} em ${fmtData(row.data)}?`)) return;
     try { await deleteRow({ data: { token: getToken() ?? "", id: row.id } }); await carregar(); }
-    catch (error) { setErro(`Não foi possível excluir o registro: ${error instanceof Error ? error.message : "erro inesperado"}`); }
+    catch (error) { if (error instanceof Error && error.message.startsWith("Sessão expirada")) { sair(); setModalOpen(true); return; } setErro(`Não foi possível excluir o registro: ${error instanceof Error ? error.message : "erro inesperado"}`); }
   };
 
   const anos = uniq(rows.map((r) => r.data.slice(0, 4))).reverse();
@@ -425,7 +426,7 @@ function Index() {
             </div>
             {isAdmin ? (
               <>
-                <FormInclusao key={editando?.id ?? "novo"} registro={editando} onSaved={async () => { await carregar(); setEditando(null); setModalOpen(false); }} />
+                <FormInclusao key={editando?.id ?? "novo"} registro={editando} onSaved={async () => { await carregar(); setEditando(null); setModalOpen(false); }}  onLogout={sair} />
                 {editando && <button type="button" className="mt-2 text-sm underline" onClick={() => setEditando(null)}>Cancelar edição</button>}
                 <h3 className="mb-2 mt-6 text-sm font-semibold">Registros adicionados</h3>
                 <div className="thin-scrollbar max-h-72 overflow-auto rounded-md border border-border/60">
@@ -478,7 +479,7 @@ function Login({ onUnlocked }: { onUnlocked: () => void }) {
   );
 }
 
-function FormInclusao({ registro, onSaved }: { registro: Row | null; onSaved: () => void | Promise<void> }) {
+function FormInclusao({ registro, onSaved, onLogout }: { registro: Row | null; onSaved: () => void | Promise<void>; onLogout: () => void }) {
   const defaultCompanhia = COMPANHIAS[0] ?? "";
   const [data, setData] = useState(registro?.data ?? new Date().toISOString().slice(0, 10));
   const [pelotao, setPelotao] = useState<string>(registro?.pelotao ?? defaultCompanhia);
@@ -511,11 +512,18 @@ function FormInclusao({ registro, onSaved }: { registro: Row | null; onSaved: ()
       pontos: calcularPontos(t, isMunicao(t) ? municoes : qtde),
     }));
     try { await saveRows({ data: { token: getToken() ?? "", id: registro?.id ?? null, rows: linhas } }); await onSaved(); }
-    catch (error) { setMsg(`Não foi possível salvar o registro: ${error instanceof Error ? error.message : "erro inesperado"}`); }
+    catch (error) {
+      const texto = error instanceof Error ? error.message : "erro inesperado";
+      if (texto.startsWith("Sessão expirada")) { onLogout(); return; }
+      setMsg(`Não foi possível salvar o registro: ${texto}`);
+    }
   };
   return (
     <div className="space-y-4">
-      <p className="text-sm text-primary">Usuário autenticado. Você pode adicionar registros.</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-primary">Usuário autenticado. Você pode adicionar registros.</p>
+        <Button type="button" variant="outline" size="sm" onClick={onLogout}><LogOut className="mr-1 h-4 w-4" />Sair da sessão</Button>
+      </div>
       <div className="grid gap-3 md:grid-cols-3">
         <label className="text-xs">Data<input type="date" className={`${inputCls} mt-1`} value={data} onChange={(e) => setData(e.target.value)} /></label>
         <label className="text-xs">Companhia
