@@ -1,6 +1,5 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
-import { useSession } from "@tanstack/react-start/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
@@ -14,10 +13,7 @@ function externalAdmin() {
   });
 }
 
-const sessionName = "admin-data-gate";
-const maxAge = 60 * 60 * 8;
-
-type AdminGateSession = { unlocked?: boolean };
+const maxAgeMs = 1000 * 60 * 60 * 8;
 
 const rowSchema = z.object({
   data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -29,15 +25,28 @@ const rowSchema = z.object({
   pontos: z.number().nonnegative(),
 });
 
-function sessionConfig() {
-  const password = process.env["SESSION_SECRET"];
-  if (!password) throw new Error("SESSION_SECRET não configurado");
-  return {
-    password,
-    name: sessionName,
-    maxAge,
-    cookie: { httpOnly: true, secure: true, sameSite: "lax" as const, path: "/" },
-  };
+function secret() {
+  const s = process.env["SESSION_SECRET"];
+  if (!s) throw new Error("SESSION_SECRET não configurado");
+  return s;
+}
+
+function sign(payload: string) {
+  return createHmac("sha256", secret()).update(payload).digest("hex");
+}
+
+function makeToken() {
+  const exp = String(Date.now() + maxAgeMs);
+  return `${exp}.${sign(exp)}`;
+}
+
+function tokenValid(token: string | undefined | null) {
+  if (!token) return false;
+  const [exp, sig] = token.split(".");
+  if (!exp || !sig || Number(exp) < Date.now()) return false;
+  const a = Buffer.from(sig, "hex");
+  const b = Buffer.from(sign(exp), "hex");
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 function passwordMatches(input: string, expected: string) {
@@ -46,31 +55,29 @@ function passwordMatches(input: string, expected: string) {
   return timingSafeEqual(received, stored);
 }
 
-async function requireUnlocked() {
-  const session = await useSession<AdminGateSession>(sessionConfig());
-  if (!session.data.unlocked) throw new Error("Acesso não autorizado");
+function requireUnlocked(token: string) {
+  if (!tokenValid(token)) throw new Error("Sessão expirada. Clique em \"Adicionar dados\" e informe a senha novamente.");
 }
 
-export const getAdminGateStatus = createServerFn({ method: "GET" }).handler(async () => {
-  const session = await useSession<AdminGateSession>(sessionConfig());
-  return { unlocked: session.data.unlocked === true };
-});
+const tokenField = z.string().max(300);
+
+export const getAdminGateStatus = createServerFn({ method: "POST" })
+  .inputValidator((data) => z.object({ token: tokenField.nullable() }).parse(data))
+  .handler(async ({ data }) => ({ unlocked: tokenValid(data.token) }));
 
 export const unlockAdminData = createServerFn({ method: "POST" })
   .inputValidator((data) => z.object({ password: z.string().min(1).max(200) }).parse(data))
   .handler(async ({ data }) => {
     const expected = process.env["ADMIN_ACCESS_PASSWORD"];
     if (!expected) throw new Error("ADMIN_ACCESS_PASSWORD não configurado");
-    if (!passwordMatches(data.password, expected)) return { ok: false as const };
-    const session = await useSession<AdminGateSession>(sessionConfig());
-    await session.update({ unlocked: true });
-    return { ok: true as const };
+    if (!passwordMatches(data.password.trim(), expected)) return { ok: false as const, token: null };
+    return { ok: true as const, token: makeToken() };
   });
 
 export const saveProductivityRows = createServerFn({ method: "POST" })
-  .inputValidator((data) => z.object({ id: z.number().int().positive().nullable(), rows: z.array(rowSchema).min(1).max(40) }).parse(data))
+  .inputValidator((data) => z.object({ token: tokenField, id: z.number().int().positive().nullable(), rows: z.array(rowSchema).min(1).max(40) }).parse(data))
   .handler(async ({ data }) => {
-    await requireUnlocked();
+    requireUnlocked(data.token);
     const supabaseAdmin = externalAdmin();
     const firstRow = data.rows[0];
     if (!firstRow) throw new Error("Nenhum registro informado");
@@ -82,9 +89,9 @@ export const saveProductivityRows = createServerFn({ method: "POST" })
   });
 
 export const deleteProductivityRow = createServerFn({ method: "POST" })
-  .inputValidator((data) => z.object({ id: z.number().int().positive() }).parse(data))
+  .inputValidator((data) => z.object({ token: tokenField, id: z.number().int().positive() }).parse(data))
   .handler(async ({ data }) => {
-    await requireUnlocked();
+    requireUnlocked(data.token);
     const supabaseAdmin = externalAdmin();
     const { error } = await supabaseAdmin.from("produtividade").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
