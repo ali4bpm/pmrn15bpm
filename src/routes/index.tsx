@@ -176,9 +176,17 @@ function Index() {
 
   const dist = useMemo(() => {
     const m = new Map<string, number>();
-    df.forEach((r) => m.set(r.pelotao, (m.get(r.pelotao) ?? 0) + (Number(r.qtde) || 0)));
+    const p = new Map<string, number>();
+    df.forEach((r) => {
+      m.set(r.pelotao, (m.get(r.pelotao) ?? 0) + (Number(r.qtde) || 0));
+      p.set(r.pelotao, (p.get(r.pelotao) ?? 0) + (Number(r.pontos) || 0));
+    });
     const total = [...m.values()].reduce((a, b) => a + b, 0) || 1;
-    return [...m].map(([name, qtde]) => ({ name, qtde, value: qtde, pct: (qtde / total) * 100 }));
+    const totalPontos = [...p.values()].reduce((a, b) => a + b, 0) || 1;
+    return [...m].map(([name, qtde]) => ({
+      name, qtde, value: qtde, pct: (qtde / total) * 100,
+      pontos: p.get(name) ?? 0, pctPontos: ((p.get(name) ?? 0) / totalPontos) * 100,
+    }));
   }, [df]);
 
   const distLoc = useMemo(() => {
@@ -189,10 +197,11 @@ function Index() {
       c.qtde += Number(r.qtde) || 0; c.pontos += Number(r.pontos) || 0; m.set(loc, c);
     });
     const total = [...m.values()].reduce((a, b) => a + b.qtde, 0) || 1;
+    const totalPontos = [...m.values()].reduce((a, b) => a + b.pontos, 0) || 1;
     return COMPANHIAS.flatMap((p) =>
       subdivOf(p)
         .filter((s) => m.has(s))
-        .map((s) => ({ name: s, pelotao: p, value: m.get(s)!.qtde, qtde: m.get(s)!.qtde, pontos: m.get(s)!.pontos, pct: (m.get(s)!.qtde / total) * 100 })),
+        .map((s) => ({ name: s, pelotao: p, value: m.get(s)!.qtde, qtde: m.get(s)!.qtde, pontos: m.get(s)!.pontos, pct: (m.get(s)!.qtde / total) * 100, pctPontos: (m.get(s)!.pontos / totalPontos) * 100 })),
     );
   }, [df]);
 
@@ -314,8 +323,8 @@ function Index() {
                 </ResponsiveContainer>
               </div>
               <table className="mt-4 w-full text-center text-sm">
-                <thead className="text-xs uppercase text-muted-foreground"><tr><th className="border-b p-2">Companhia</th><th className="border-b p-2">Qtde</th><th className="border-b p-2">Porcentagem de Ocorrências</th></tr></thead>
-                <tbody>{dist.map((d) => <tr key={d.name}><td className="p-2">{d.name}</td><td className="p-2">{d.qtde}</td><td className="p-2">{d.pct.toFixed(2)}%</td></tr>)}</tbody>
+                <thead className="text-xs uppercase text-muted-foreground"><tr><th className="border-b p-2">Companhia</th><th className="border-b p-2">Qtde</th><th className="border-b p-2">Pontos</th><th className="border-b p-2">Porcentagem de Ocorrências</th><th className="border-b p-2">Porcentagem de Pontos</th></tr></thead>
+                <tbody>{dist.map((d) => <tr key={d.name}><td className="p-2">{d.name}</td><td className="p-2">{d.qtde}</td><td className="p-2">{d.pontos}</td><td className="p-2">{d.pct.toFixed(2)}%</td><td className="p-2">{d.pctPontos.toFixed(2)}%</td></tr>)}</tbody>
               </table>
             </div>
           ) : <p className="text-sm text-muted-foreground">Sem dados para a distribuição por Companhia.</p>}
@@ -336,13 +345,13 @@ function Index() {
                 </div>
                 <table className="mt-4 w-full text-center text-sm">
                   <thead className="text-xs uppercase text-muted-foreground">
-                    <tr><th className="border-b p-2">Companhia</th><th className="border-b p-2">Subdivisão</th><th className="border-b p-2">Qtde</th><th className="border-b p-2">Porcentagem de Ocorrências</th></tr>
+                    <tr><th className="border-b p-2">Companhia</th><th className="border-b p-2">Subdivisão</th><th className="border-b p-2">Qtde</th><th className="border-b p-2">Pontos</th><th className="border-b p-2">Porcentagem de Ocorrências</th><th className="border-b p-2">Porcentagem de Pontos</th></tr>
                   </thead>
                   <tbody>
                     {distLoc.map((d) => (
                       <tr key={d.name} className="border-b last:border-0">
                         <td className="p-2">{d.pelotao}</td><td className="p-2">{d.name}</td>
-                        <td className="p-2">{d.qtde}</td><td className="p-2">{d.pct.toFixed(2)}%</td>
+                        <td className="p-2">{d.qtde}</td><td className="p-2">{d.pontos}</td><td className="p-2">{d.pct.toFixed(2)}%</td><td className="p-2">{d.pctPontos.toFixed(2)}%</td>
                       </tr>
                     ))}
                   </tbody>
