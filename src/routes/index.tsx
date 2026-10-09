@@ -8,6 +8,8 @@ import autoTable from "jspdf-autotable";
 import { supabase } from "@/integrations/supabase/external-client";
 import brasao from "@/assets/brasao-15-bpm.png.asset.json";
 import { Button } from "@/components/ui/button";
+const TOKEN_KEY = "admin-data-token";
+const getToken = () => (typeof window === "undefined" ? null : window.sessionStorage.getItem(TOKEN_KEY));
 import { deleteProductivityRow, getAdminGateStatus, saveProductivityRows, unlockAdminData } from "@/lib/admin-gate.functions";
 
 export const Route = createFileRoute("/")({
@@ -148,14 +150,14 @@ function Index() {
   };
   useEffect(() => {
     carregar();
-    gateStatus().then(({ unlocked }) => setIsAdmin(unlocked)).catch(() => setIsAdmin(false));
+    gateStatus({ data: { token: getToken() } }).then(({ unlocked }) => setIsAdmin(unlocked)).catch(() => setIsAdmin(false));
   }, []);
   const abrirInclusao = () => { setEditando(null); setModalOpen(true); };
   const fecharModal = () => { setModalOpen(false); void carregar(); };
   const abrirEdicao = (row: Row) => { setEditando(row); setModalOpen(true); };
   const excluir = async (row: Row) => {
     if (!window.confirm(`Excluir o registro de ${row.efetivo} em ${fmtData(row.data)}?`)) return;
-    try { await deleteRow({ data: { id: row.id } }); await carregar(); }
+    try { await deleteRow({ data: { token: getToken() ?? "", id: row.id } }); await carregar(); }
     catch (error) { setErro(`Não foi possível excluir o registro: ${error instanceof Error ? error.message : "erro inesperado"}`); }
   };
 
@@ -461,8 +463,9 @@ function Login({ onUnlocked }: { onUnlocked: () => void }) {
   const entrar = async () => {
     try {
       const result = await unlock({ data: { password: senha } });
-      if (result.ok) onUnlocked(); else setMsg("Senha inválida.");
-    } catch { setMsg("Não foi possível validar a senha."); }
+      if (result.ok && result.token) { window.sessionStorage.setItem(TOKEN_KEY, result.token); setMsg("Senha correta. Acesso liberado."); onUnlocked(); }
+      else setMsg("Senha incorreta. Tente novamente.");
+    } catch { setMsg("Não foi possível validar a senha. Tente novamente."); }
   };
   return (
     <div className="mx-auto max-w-md space-y-3">
@@ -507,7 +510,7 @@ function FormInclusao({ registro, onSaved }: { registro: Row | null; onSaved: ()
       qtde: isMunicao(t) || ENTORPECENTES_QTDE[t] ? 1 : qtde,
       pontos: calcularPontos(t, isMunicao(t) ? municoes : qtde),
     }));
-    try { await saveRows({ data: { id: registro?.id ?? null, rows: linhas } }); await onSaved(); }
+    try { await saveRows({ data: { token: getToken() ?? "", id: registro?.id ?? null, rows: linhas } }); await onSaved(); }
     catch (error) { setMsg(`Não foi possível salvar o registro: ${error instanceof Error ? error.message : "erro inesperado"}`); }
   };
   return (
