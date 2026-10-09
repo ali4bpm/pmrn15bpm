@@ -323,8 +323,8 @@ function Index() {
                 </ResponsiveContainer>
               </div>
               <table className="mt-4 w-full text-center text-sm">
-                <thead className="text-xs uppercase text-muted-foreground"><tr><th className="border-b p-2">Companhia</th><th className="border-b p-2">Qtde</th><th className="border-b p-2">Porcentagem de Ocorrências</th></tr></thead>
-                <tbody>{dist.map((d) => <tr key={d.name}><td className="p-2">{d.name}</td><td className="p-2">{d.qtde}</td><td className="p-2">{d.pct.toFixed(2)}%</td></tr>)}</tbody>
+                <thead className="text-xs uppercase text-muted-foreground"><tr><th className="border-b p-2">Companhia</th><th className="border-b p-2">Qtde</th><th className="border-b p-2">Pontos</th><th className="border-b p-2">Porcentagem de Ocorrências</th><th className="border-b p-2">Porcentagem de Pontos</th></tr></thead>
+                <tbody>{dist.map((d) => <tr key={d.name}><td className="p-2">{d.name}</td><td className="p-2">{d.qtde}</td><td className="p-2">{d.pontos}</td><td className="p-2">{d.pct.toFixed(2)}%</td><td className="p-2">{d.pctPontos.toFixed(2)}%</td></tr>)}</tbody>
               </table>
             </div>
           ) : <p className="text-sm text-muted-foreground">Sem dados para a distribuição por Companhia.</p>}
