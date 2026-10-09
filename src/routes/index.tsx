@@ -197,10 +197,11 @@ function Index() {
       c.qtde += Number(r.qtde) || 0; c.pontos += Number(r.pontos) || 0; m.set(loc, c);
     });
     const total = [...m.values()].reduce((a, b) => a + b.qtde, 0) || 1;
+    const totalPontos = [...m.values()].reduce((a, b) => a + b.pontos, 0) || 1;
     return COMPANHIAS.flatMap((p) =>
       subdivOf(p)
         .filter((s) => m.has(s))
-        .map((s) => ({ name: s, pelotao: p, value: m.get(s)!.qtde, qtde: m.get(s)!.qtde, pontos: m.get(s)!.pontos, pct: (m.get(s)!.qtde / total) * 100 })),
+        .map((s) => ({ name: s, pelotao: p, value: m.get(s)!.qtde, qtde: m.get(s)!.qtde, pontos: m.get(s)!.pontos, pct: (m.get(s)!.qtde / total) * 100, pctPontos: (m.get(s)!.pontos / totalPontos) * 100 })),
     );
   }, [df]);
 
