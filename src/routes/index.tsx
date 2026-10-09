@@ -345,13 +345,13 @@ function Index() {
                 </div>
                 <table className="mt-4 w-full text-center text-sm">
                   <thead className="text-xs uppercase text-muted-foreground">
-                    <tr><th className="border-b p-2">Companhia</th><th className="border-b p-2">Subdivisão</th><th className="border-b p-2">Qtde</th><th className="border-b p-2">Porcentagem de Ocorrências</th></tr>
+                    <tr><th className="border-b p-2">Companhia</th><th className="border-b p-2">Subdivisão</th><th className="border-b p-2">Qtde</th><th className="border-b p-2">Pontos</th><th className="border-b p-2">Porcentagem de Ocorrências</th><th className="border-b p-2">Porcentagem de Pontos</th></tr>
                   </thead>
                   <tbody>
                     {distLoc.map((d) => (
                       <tr key={d.name} className="border-b last:border-0">
                         <td className="p-2">{d.pelotao}</td><td className="p-2">{d.name}</td>
-                        <td className="p-2">{d.qtde}</td><td className="p-2">{d.pct.toFixed(2)}%</td>
+                        <td className="p-2">{d.qtde}</td><td className="p-2">{d.pontos}</td><td className="p-2">{d.pct.toFixed(2)}%</td><td className="p-2">{d.pctPontos.toFixed(2)}%</td>
                       </tr>
                     ))}
                   </tbody>
