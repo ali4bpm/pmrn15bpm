@@ -1,0 +1,23 @@
+15BPM_PMRN — ATUALIZAÇÃO V5
+
+OPÇÃO RECOMENDADA: use o ZIP incremental para preservar sua conexão já configurada.
+
+1. Na janela do Streamlit em execução, pressione Ctrl+C.
+2. Extraia 15BPM_PMRN_atualizacao_v5.zip.
+3. Copie app.py, data_model.py e scoring.py para a pasta principal do projeto atual.
+4. Se o Windows perguntar, substitua os arquivos no destino.
+5. NÃO substitua nem apague .streamlit/secrets.toml ou .streamlit/google-service-account.json.
+6. Execute 3_TESTAR_GOOGLE_SHEETS.bat; confirme a mensagem "Conexao com Google Sheets: OK".
+7. Execute 2_INICIAR_APP.bat.
+
+Alterações v5:
+- Interface do aplicativo, opções de pesquisa e quadros de dados em maiúsculas.
+- Brasão centralizado, com título acima, na barra lateral.
+- Indicadores: OCORRÊNCIAS, OCORRÊNCIAS POR TIPO e PONTOS DAS OCORRÊNCIAS.
+- Removido o indicador de pontos atribuídos ao efetivo.
+- Pontos exibidos e calculados como inteiros, sem casas decimais.
+- Percentuais com uma casa decimal e vírgula (ex.: 95,2%).
+- Títulos de seções do painel e rodapé centralizados.
+- Removido o botão de download CSV dos dados filtrados. O PDF permanece.
+
+Não é necessária migração nem modificação manual da planilha para estas alterações.
