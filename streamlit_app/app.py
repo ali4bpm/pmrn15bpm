@@ -8,19 +8,19 @@ import time
 import uuid
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
-from data_model import build_frames, ranking_frame, totals_by_dimension
+from data_model import build_frames, percentage_of_total_points, ranking_frame, totals_by_dimension
 from scoring import OCORRENCIAS_BASE, PTS_BASE
 from sheets_backend import (
     EMPLOYEE_HEADERS, EMPLOYEE_TAB, LAUNCH_TAB, ROLES, TYPE_HEADERS, TYPES_TAB,
     SheetsSetupError, append_mapping, create_spreadsheet_client, initialize_schema,
-    is_active, make_id, read_rows, record_timestamp, save_launch,
+    delete_launch, is_active, make_id, read_rows, record_timestamp, save_launch,
     spreadsheet_id, update_mapping,
 )
 
@@ -31,7 +31,6 @@ APP_DIR = Path(__file__).resolve().parent
 LOGO_PATH = APP_DIR / "assets" / "brasao_15bpm.png"
 FAVICON_PATH = APP_DIR / "assets" / "favicon_15bpm.png"
 FUNCOES = ["SD PM", "CB PM", "3º SGT PM", "2º SGT PM", "1º SGT PM", "ST PM", "ASP PM", "2º TEN PM", "1º TEN PM", "CAP PM", "MAJ PM", "TC PM", "CEL PM"]
-MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
 from organization import COMPANHIAS, normalize_org_label
 from text_utils import normalize_person_name
 
@@ -244,7 +243,13 @@ def point_catalog(type_rows: list[dict[str, Any]]) -> tuple[dict[str, float], li
     return points, sorted(active_types, key=str.casefold)
 
 
-def pdf_report(frame: pd.DataFrame, title: str, subtitle: str, columns: list[str]) -> bytes:
+def pdf_report(
+    frame: pd.DataFrame,
+    title: str,
+    subtitle: str,
+    columns: list[str],
+    summary: dict[str, str] | None = None,
+) -> bytes:
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_CENTER
     from reportlab.lib.pagesizes import landscape, A4
@@ -258,7 +263,44 @@ def pdf_report(frame: pd.DataFrame, title: str, subtitle: str, columns: list[str
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle("TitlePMRN", parent=styles["Title"], alignment=TA_CENTER, textColor=colors.HexColor("#41439a"), fontSize=15)
     small = ParagraphStyle("SmallPMRN", parent=styles["Normal"], fontSize=7, leading=9)
-    elements = [Paragraph("15º BPM — PMRN", title_style), Paragraph(escape(title.upper()), styles["Heading2"]), Paragraph(escape(subtitle.upper()), small), Spacer(1, 4 * mm)]
+    elements = [
+        Paragraph("Produtividade e Pontuação — 15º BPM PMRN", title_style),
+        Paragraph(escape(title.upper()), styles["Heading2"]),
+        Paragraph(escape(subtitle.upper()), small),
+        Spacer(1, 3 * mm),
+    ]
+    if summary:
+        summary_cells = [
+            [
+                Paragraph(escape(label.upper()), small)
+                for label in summary
+            ],
+            [
+                Paragraph(escape(str(value)), styles["BodyText"])
+                for value in summary.values()
+            ],
+        ]
+        summary_table = Table(
+            summary_cells,
+            colWidths=[doc.width / len(summary)] * len(summary),
+        )
+        summary_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f0efe9")),
+            ("BACKGROUND", (0, 1), (-1, 1), colors.white),
+            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#d5d0c4")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#d5d0c4")),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        elements.extend([
+            Paragraph("INDICADORES DOS DADOS FILTRADOS", styles["Heading3"]),
+            summary_table,
+            Spacer(1, 4 * mm),
+        ])
+    else:
+        elements.append(Spacer(1, 1 * mm))
     table_data = [[Paragraph(escape(col.upper()), small) for col in columns]]
     for _, row in frame.iterrows():
         vals = []
@@ -294,18 +336,44 @@ def pdf_report(frame: pd.DataFrame, title: str, subtitle: str, columns: list[str
 def sidebar_filters(details: pd.DataFrame, facts: pd.DataFrame, people: list[dict[str, Any]], known_types: list[str]) -> dict[str, Any]:
     with st.sidebar:
         if st.session_state.pop("reset_filters_requested", False):
-            for key in ["filter_year", "filter_month", "filter_company", "filter_division", "filter_people", "filter_types"]:
+            for key in ["filter_start_date", "filter_end_date", "filter_company", "filter_division", "filter_people", "filter_types"]:
                 st.session_state.pop(key, None)
+
         st.markdown("<h3 class='sidebar-title'>15º BPM PMRN</h3>", unsafe_allow_html=True)
-        st.image(str(LOGO_PATH), width=160)
+        with st.container():
+            _, logo_column, _ = st.columns([1, 2, 1])
+            logo_column.image(
+                str(LOGO_PATH),
+                width=160,
+                alt="Brasão do 15º BPM",
+            )
         st.divider()
         st.markdown("#### FILTROS")
-        dates = [x for x in details.get("Data", pd.Series(dtype=object)).tolist() if isinstance(x, date)]
-        years = sorted({d.year for d in dates}, reverse=True)
-        year_options = ["Todos"] + [str(y) for y in years]
-        year = st.selectbox("Ano", year_options, key="filter_year")
-        month_options = ["Todos"] + MESES
-        month = st.selectbox("Mês", month_options, key="filter_month")
+        available_dates = (
+            details.get("Data", pd.Series(dtype=object)).tolist()
+            + facts.get("Data", pd.Series(dtype=object)).tolist()
+        )
+        dates = [value for value in available_dates if isinstance(value, date)]
+        valid_dates = sorted(set(dates))
+
+        start_default = valid_dates[0] if valid_dates else date.today()
+        end_default = valid_dates[-1] if valid_dates else date.today()
+
+        start_date = st.date_input(
+            "Data inicial",
+            value=start_default,
+            format="DD/MM/YYYY",
+            key="filter_start_date",
+        )
+
+        end_date = st.date_input(
+            "Data final",
+            value=end_default,
+            format="DD/MM/YYYY",
+            key="filter_end_date",
+        )
+        if start_date > end_date:
+            st.warning("A data inicial não pode ser posterior à data final.")
 
         # A estrutura do organograma é a fonte única de opções; não misturamos
         # subdivisões de outra Companhia apenas porque existem em dados históricos.
@@ -331,7 +399,14 @@ def sidebar_filters(details: pd.DataFrame, facts: pd.DataFrame, people: list[dic
         if st.button("Limpar filtros", use_container_width=True, key="clear_filters_bottom"):
             st.session_state.reset_filters_requested = True
             st.rerun()
-    return {"year": year, "month": month, "company": company, "division": division, "people": selected_people, "types": selected_types}
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "company": company,
+        "division": division,
+        "people": selected_people,
+        "types": selected_types,
+    }
 
 
 def apply_filters(details: pd.DataFrame, facts: pd.DataFrame, filters: dict[str, Any]) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -339,11 +414,15 @@ def apply_filters(details: pd.DataFrame, facts: pd.DataFrame, filters: dict[str,
     f = facts.copy()
     for frame in (d, f):
         if "Data" in frame.columns:
-            if filters["year"] != "Todos":
-                frame.drop(frame.index[~frame["Data"].apply(lambda v: isinstance(v, date) and v.year == int(filters["year"]))], inplace=True)
-            if filters["month"] != "Todos":
-                month_num = MESES.index(filters["month"]) + 1
-                frame.drop(frame.index[~frame["Data"].apply(lambda v: isinstance(v, date) and v.month == month_num)], inplace=True)
+            frame.drop(
+                frame.index[
+                    ~frame["Data"].apply(
+                        lambda value: isinstance(value, date)
+                        and filters["start_date"] <= value <= filters["end_date"]
+                    )
+                ],
+                inplace=True,
+            )
             if filters["company"] != "Todos":
                 frame.drop(frame.index[frame["Companhia"].astype(str) != filters["company"]], inplace=True)
             if filters["division"] != "Todos":
@@ -361,11 +440,18 @@ def apply_filters(details: pd.DataFrame, facts: pd.DataFrame, filters: dict[str,
 def dashboard(details_all: pd.DataFrame, facts_all: pd.DataFrame, people: list[dict[str, Any]], known_types: list[str]) -> None:
     filters = sidebar_filters(details_all, facts_all, people, known_types)
     details, facts = apply_filters(details_all, facts_all, filters)
+    filtered_summary = {
+        "Ocorrências": str(int(facts["ID"].nunique()) if not facts.empty else 0),
+        "Ocorrências por tipo": str(int(facts["Qtde"].sum()) if not facts.empty else 0),
+        "Pontos das ocorrências": fmt_num(facts["Pontos"].sum()) if not facts.empty else "0",
+        "% Pontos": fmt_percentage(percentage_of_total_points(facts, facts_all)),
+    }
     st.markdown(f"<h1 class='main-title'>{APP_TITLE}</h1>", unsafe_allow_html=True)
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Ocorrências", int(facts["ID"].nunique()) if not facts.empty else 0)
-    c2.metric("Ocorrências por tipo", int(facts["Qtde"].sum()) if not facts.empty else 0)
-    c3.metric("Pontos das ocorrências", fmt_num(facts["Pontos"].sum()) if not facts.empty else "0")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Ocorrências", filtered_summary["Ocorrências"])
+    c2.metric("Ocorrências por tipo", filtered_summary["Ocorrências por tipo"])
+    c3.metric("Pontos das ocorrências", filtered_summary["Pontos das ocorrências"])
+    c4.metric("% Pontos", filtered_summary["% Pontos"])
 
     with st.expander("Sobre o aplicativo e critérios de pontuação"):
         st.write("Os gráficos contam cada tipo de ocorrência uma vez por lançamento. O detalhamento e o ranking atribuem a pontuação individual a cada policial distinto presente nas equipes registradas.")
@@ -381,7 +467,7 @@ def dashboard(details_all: pd.DataFrame, facts_all: pd.DataFrame, people: list[d
             view["Pontos"] = view["Pontos"].apply(fmt_num)
             st.dataframe(uppercase_frame(view[["Data", "Companhia", "Subdivisão", "Efetivo", "Tipo de OC", "Qtde", "Pontos"]]), use_container_width=True, hide_index=True, height=320)
             try:
-                pdf = pdf_report(view, "Dados filtrados", f"Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}", ["Data", "Companhia", "Subdivisão", "Efetivo", "Tipo de OC", "Qtde", "Pontos"])
+                pdf = pdf_report(view, "Dados filtrados", f"Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}", ["Data", "Companhia", "Subdivisão", "Efetivo", "Tipo de OC", "Qtde", "Pontos"], filtered_summary)
                 st.download_button("Download em PDF — Resumo", pdf, file_name="15BPM_PMRN_resumo.pdf", mime="application/pdf")
             except Exception as exc:
                 st.warning(f"Não foi possível gerar o PDF: {exc}")
@@ -439,7 +525,7 @@ def dashboard(details_all: pd.DataFrame, facts_all: pd.DataFrame, people: list[d
             rank_view.insert(0, "#", range(1, len(rank_view) + 1))
             st.dataframe(uppercase_frame(rank_view[["#", "Efetivo", "Companhia", "Subdivisão", "Qtde", "Pontos"]]), use_container_width=True, hide_index=True, height=300)
             pdf_frame = ranking.copy()
-            pdf = pdf_report(pdf_frame, "Ranking de Produtividade", f"Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}", ["Efetivo", "Companhia", "Subdivisão", "Qtde", "Pontos"])
+            pdf = pdf_report(pdf_frame, "Ranking de Produtividade", f"Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}", ["Efetivo", "Companhia", "Subdivisão", "Qtde", "Pontos"], filtered_summary)
             st.download_button("Download em PDF — Ranking", pdf, file_name="15BPM_PMRN_ranking.pdf", mime="application/pdf")
             top = ranking.head(20).sort_values("Pontos", ascending=True)
             top_chart = top.copy()
@@ -452,7 +538,7 @@ def dashboard(details_all: pd.DataFrame, facts_all: pd.DataFrame, people: list[d
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("Sem pontos no ranking para os filtros selecionados.")
-    st.markdown("<div class='app-footer'>Aplicativo desenvolvido para o 15º BPM — PMRN · armazenamento pelo Google Sheets</div>", unsafe_allow_html=True)
+    st.markdown("<div class='app-footer'>Aplicativo desenvolvido para o 15º BPM — PMRN</div>", unsafe_allow_html=True)
 
 
 def render_flash_message() -> None:
@@ -567,6 +653,140 @@ def _active_type_names(type_rows: list[dict[str, Any]]) -> list[str]:
     return [str(r.get("Tipo de OC", "")).strip() for r in type_rows if str(r.get("Tipo de OC", "")).strip() and is_active(r.get("Ativo", True))]
 
 
+def render_registered_launches(
+    launch_ws,
+    launch_rows: list[dict[str, Any]],
+    launch_lookup: dict[str, dict[str, Any]],
+    labels_by_id: dict[str, str],
+    launch_members: Callable[[dict[str, Any]], list[str]],
+    launch_types: Callable[[dict[str, Any]], list[str]],
+    launch_sort_key: Callable[[dict[str, Any]], float],
+) -> None:
+    if not launch_rows:
+        return
+
+    st.markdown("#### Lançamentos registrados")
+    available_dates = set()
+    for row in launch_rows:
+        parsed_date = pd.to_datetime(row.get("Data"), errors="coerce", dayfirst=True)
+        if not pd.isna(parsed_date):
+            available_dates.add(parsed_date.date())
+    date_options = [value.strftime("%d/%m/%Y") for value in sorted(available_dates, reverse=True)]
+    type_options = sorted(
+        {kind for row in launch_rows for kind in launch_types(row)},
+        key=str.casefold,
+    )
+    date_col, team_col, type_col = st.columns([1, 1.5, 1.5])
+    if st.session_state.get("launch_list_date_filter", "Todas") not in ["Todas"] + date_options:
+        st.session_state["launch_list_date_filter"] = "Todas"
+    date_filter = date_col.selectbox(
+        "Pesquisar por data",
+        ["Todas"] + date_options,
+        key="launch_list_date_filter",
+    )
+    team_filter = team_col.text_input(
+        "Pesquisar por equipe",
+        key="launch_list_team_filter",
+        placeholder="Nome de policial",
+    ).strip().casefold()
+    if st.session_state.get("launch_list_type_filter", "Todos") not in ["Todos"] + type_options:
+        st.session_state["launch_list_type_filter"] = "Todos"
+    type_filter = type_col.selectbox(
+        "Pesquisar por tipo de OC",
+        ["Todos"] + type_options,
+        key="launch_list_type_filter",
+    )
+
+    visible_launches = []
+    for row in sorted(launch_rows, key=launch_sort_key, reverse=True):
+        members = launch_members(row)
+        kinds = launch_types(row)
+        if date_filter != "Todas" and fmt_date(row.get("Data")) != date_filter:
+            continue
+        if team_filter and not any(team_filter in member.casefold() for member in members):
+            continue
+        if type_filter != "Todos" and type_filter not in kinds:
+            continue
+        visible_launches.append((row, members, kinds))
+
+    pending_delete_id = str(st.session_state.get("pending_launch_delete", ""))
+    pending_delete = launch_lookup.get(pending_delete_id)
+    if pending_delete:
+        pending_members = ", ".join(launch_members(pending_delete)) or "—"
+        st.warning(
+            f"Confirma a exclusão do lançamento de {fmt_date(pending_delete.get('Data'))} "
+            f"da Companhia {pending_delete.get('Companhia', '—')} — equipe: {pending_members} — "
+            f"tipo(s) de OC: {', '.join(launch_types(pending_delete)) or '—'}?"
+        )
+        confirm_col, cancel_col = st.columns(2)
+        if confirm_col.button(
+            "Confirmar exclusão",
+            type="primary",
+            use_container_width=True,
+            key=f"confirm_delete_launch_{pending_delete_id}",
+        ):
+            row_number = int(pending_delete.get("_row_number", 0) or 0)
+            if row_number < 2:
+                st.error("Não foi possível excluir: o lançamento não possui uma linha válida na planilha.")
+            else:
+                try:
+                    delete_launch(launch_ws, row_number)
+                except Exception as exc:
+                    st.error(f"Não foi possível excluir o lançamento: {exc}")
+                else:
+                    st.session_state.pop("pending_launch_delete", None)
+                    st.session_state.flash_message = "Lançamento excluído com sucesso."
+                    st.session_state.flash_kind = "success"
+                    st.session_state.reset_launch_form = True
+                    st.cache_data.clear()
+                    st.rerun()
+        if cancel_col.button(
+            "Cancelar",
+            use_container_width=True,
+            key=f"cancel_delete_launch_{pending_delete_id}",
+        ):
+            st.session_state.pop("pending_launch_delete", None)
+            st.rerun()
+    elif pending_delete_id:
+        st.session_state.pop("pending_launch_delete", None)
+
+    if not visible_launches:
+        st.info("Nenhum lançamento corresponde à pesquisa.")
+        return
+
+    with st.container(height=600, border=True):
+        header_date, header_details, header_types, header_actions = st.columns(
+            [1, 3, 1.3, 1.4]
+        )
+        header_date.caption("DATA")
+        header_details.caption("COMPANHIA / EQUIPE")
+        header_types.caption("TIPOS DE OC")
+        header_actions.caption("AÇÕES")
+        for row, members, kinds in visible_launches:
+            row_id = str(row.get("ID", "")).strip()
+            date_col, details_col, types_col, actions_col = st.columns([1, 3, 1.3, 1.4])
+            date_col.write(fmt_date(row.get("Data")))
+            details_col.write(str(row.get("Companhia", "")))
+            details_col.caption(f"EQUIPE: {', '.join(members) or '—'}")
+            types_col.write(", ".join(kinds) or "—")
+            update_col, delete_col = actions_col.columns(2)
+            if update_col.button(
+                "Atualizar",
+                key=f"update_launch_{row_id}",
+                use_container_width=True,
+            ):
+                st.session_state["launch_action"] = "Editar lançamento existente"
+                st.session_state["launch_edit_choice"] = labels_by_id[row_id]
+                st.rerun()
+            if delete_col.button(
+                "Excluir",
+                key=f"delete_launch_{row_id}",
+                use_container_width=True,
+            ):
+                st.session_state["pending_launch_delete"] = row_id
+                st.rerun()
+
+
 def render_launch_admin(launch_ws, launch_rows: list[dict[str, Any]], employee_rows: list[dict[str, Any]], active_types: list[str], point_map: dict[str, float]) -> None:
     # Zera os widgets depois de salvar, preservando a autenticação administrativa.
     if st.session_state.get("reset_launch_form"):
@@ -583,17 +803,49 @@ def render_launch_admin(launch_ws, launch_rows: list[dict[str, Any]], employee_r
             st.session_state.pop(f"role_{removed_team_idx}_{role}", None)
 
     st.subheader("Adicionar dados — lançamento operacional")
+
+    def launch_members(row: dict[str, Any]) -> list[str]:
+        return [
+            str(value).strip()
+            for key, value in row.items()
+            if re.fullmatch(r"Equipe\s+\d+\s+-\s+(Cmt|Mot|P1|P2)", str(key), re.I)
+            and str(value or "").strip()
+        ]
+
+    def launch_types(row: dict[str, Any]) -> list[str]:
+        numbered = []
+        for key, value in row.items():
+            match = re.fullmatch(r"Tipo OC\s*(\d+)", str(key), re.I)
+            if match and str(value or "").strip():
+                numbered.append((int(match.group(1)), str(value).strip()))
+        return [value for _, value in sorted(numbered)]
+
+    def launch_sort_key(row: dict[str, Any]) -> float:
+        parsed = pd.to_datetime(row.get("Data"), errors="coerce", dayfirst=True)
+        return parsed.timestamp() if not pd.isna(parsed) else 0.0
+
+    launch_lookup = {
+        str(row.get("ID", "")): row
+        for row in launch_rows
+        if str(row.get("ID", "")).strip()
+    }
+    labels_by_id: dict[str, str] = {}
+    for row in sorted(launch_rows, key=launch_sort_key, reverse=True):
+        row_id = str(row.get("ID", "")).strip()
+        members = ", ".join(launch_members(row))
+        labels_by_id[row_id] = (
+            f"{fmt_date(row.get('Data'))} · {row.get('Companhia', '')} · "
+            f"{members[:65]} · ID {row_id}"
+        )
+
     modes = ["Novo lançamento", "Editar lançamento existente"] if launch_rows else ["Novo lançamento"]
     mode = st.radio("Ação", modes, horizontal=True, key="launch_action")
     existing: dict[str, Any] | None = None
     if mode == "Editar lançamento existente":
-        labels = []
-        lookup: dict[str, dict[str, Any]] = {}
-        for row in sorted(launch_rows, key=lambda r: str(r.get("Data", "")), reverse=True):
-            team_members = ", ".join([str(v) for k, v in row.items() if re.fullmatch(r"Equipe\s+\d+\s+-\s+(Cmt|Mot|P1|P2)", str(k), re.I) and str(v or "").strip()])
-            label = f"{fmt_date(row.get('Data'))} · {row.get('Companhia','')} · {team_members[:65]} · ID {str(row.get('ID',''))[:8]}"
-            labels.append(label)
-            lookup[label] = row
+        labels = list(labels_by_id.values())
+        lookup = {labels_by_id[row_id]: row for row_id, row in launch_lookup.items()}
+        if st.session_state.get("launch_edit_choice") not in labels:
+            st.session_state.pop("launch_edit_choice", None)
         choice = st.selectbox("Selecione o lançamento", labels, key="launch_edit_choice")
         existing = lookup.get(choice)
 
@@ -744,6 +996,15 @@ def render_launch_admin(launch_ws, launch_rows: list[dict[str, Any]], employee_r
 
     submit_label = "Salvar alterações" if existing else "Adicionar dados"
     submit = st.button(submit_label, type="primary", use_container_width=True, key=f"save_launch_{context}")
+    render_registered_launches(
+        launch_ws,
+        launch_rows,
+        launch_lookup,
+        labels_by_id,
+        launch_members,
+        launch_types,
+        launch_sort_key,
+    )
     if not submit:
         return
 
@@ -889,7 +1150,7 @@ def main() -> None:
     # sem botão manual. As escritas limpam o cache e forçam a atualização imediata.
     if st.session_state.view == "painel":
         st_autorefresh(interval=15_000, limit=None, key="15bpm-live-refresh")
-    with st.spinner("Conectando ao Google Sheets..."):
+    with st.spinner("Carregando Aplicativo"):
         try:
             book, tabs = get_book_and_tabs()
             employee_rows, launch_rows, type_rows = load_sheet_rows(spreadsheet_id())

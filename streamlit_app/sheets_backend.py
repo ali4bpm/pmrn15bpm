@@ -217,6 +217,22 @@ def save_launch(ws: gspread.Worksheet, mapping: dict[str, Any], existing_row_num
         append_mapping(ws, normalized)
 
 
+def delete_launch(
+    ws: gspread.Worksheet,
+    existing_row_number: int,
+) -> None:
+    """Exclui um lançamento pela linha física da planilha."""
+
+    row_number = int(existing_row_number)
+
+    if row_number < 2:
+        raise ValueError(
+            "Linha inválida. Não é permitido excluir o cabeçalho da planilha."
+        )
+
+    ws.delete_rows(row_number)
+
+
 def make_id() -> str:
     return str(uuid.uuid4())
 

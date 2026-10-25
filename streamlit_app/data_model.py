@@ -156,12 +156,62 @@ def totals_by_dimension(facts: pd.DataFrame, dimension: str) -> pd.DataFrame:
     result = result.sort_values(["Qtde", "Pontos"], ascending=False).reset_index(drop=True)
     return result
 
+def percentage_of_total_points(
+    filtered_facts: pd.DataFrame,
+    all_facts: pd.DataFrame,
+) -> float:
+    """Calcula a porcentagem dos pontos filtrados em relação ao total."""
+
+    def total_points(frame: pd.DataFrame) -> float:
+        if frame is None or frame.empty or "Pontos" not in frame.columns:
+            return 0.0
+
+        values = pd.to_numeric(
+            frame["Pontos"],
+            errors="coerce",
+        ).fillna(0)
+
+        return float(values.sum())
+
+    total = total_points(all_facts)
+
+    if total <= 0:
+        return 0.0
+
+    filtered_total = total_points(filtered_facts)
+    return filtered_total / total * 100.0
+
 
 def ranking_frame(details: pd.DataFrame) -> pd.DataFrame:
     columns = ["Efetivo", "Companhia", "Subdivisão", "Qtde", "Pontos"]
     if details.empty:
         return pd.DataFrame(columns=columns)
-    result = details.groupby(["Efetivo", "Companhia", "Subdivisão"], dropna=False).agg(Qtde=("Qtde", "sum"), Pontos=("Pontos", "sum")).reset_index()
+
+    source = details.copy()
+    for dimension in ("Companhia", "Subdivisão"):
+        if dimension not in source.columns:
+            source[dimension] = ""
+
+    grouped = source.groupby("Efetivo", dropna=False, sort=False)
+    result = grouped.agg(Qtde=("Qtde", "sum"), Pontos=("Pontos", "sum")).reset_index()
+    for dimension in ("Companhia", "Subdivisão"):
+        labels = grouped[dimension].agg(_ranking_dimension_label).rename(dimension).reset_index()
+        result = result.merge(labels, on="Efetivo", how="left")
+
     result["Pontos"] = pd.to_numeric(result["Pontos"], errors="coerce").fillna(0)
     result["Qtde"] = pd.to_numeric(result["Qtde"], errors="coerce").fillna(0)
     return result.sort_values(["Pontos", "Qtde", "Efetivo"], ascending=[False, False, True]).reset_index(drop=True)
+
+
+def _ranking_dimension_label(values: pd.Series) -> str:
+    labels = sorted(
+        {
+            str(value).strip()
+            for value in values
+            if pd.notna(value) and str(value).strip()
+        },
+        key=str.casefold,
+    )
+    if not labels:
+        return "—"
+    return labels[0] if len(labels) == 1 else "Várias"

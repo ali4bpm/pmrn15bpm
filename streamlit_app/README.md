@@ -11,8 +11,10 @@ Aplicação de consulta, produtividade e pontuação do 15º BPM/PMRN. Esta vers
 - A aba `Efetivo 15BPM` fica no início e guarda `Função`, `Nome de Guerra`, estado ativo e identificadores.
 - A aba `Lançamentos` armazena **uma linha por inclusão**. Os nomes de cada equipe ficam em colunas de função (`Equipe 1 - Cmt`, `Equipe 1 - Mot`, `Equipe 1 - P1`, `Equipe 1 - P2` etc.); uma mesma linha pode conter várias equipes e vários tipos de OC. O aplicativo reserva colunas para até 10 equipes (Cmt/Mot/P1/P2) e vários tipos; se necessário, novas colunas de tipos são criadas automaticamente.
 - A aba `Tipos OC` traz as categorias e pontuações-base da aplicação original. Na primeira inicialização, os tipos ausentes são acrescentados sem excluir abas ou linhas existentes.
-- O painel mantém filtros, dados detalhados por policial, ranking, gráficos de distribuição por Companhia/Subdivisão e exportação para CSV/PDF.
-- A inclusão e a edição exigem senha administrativa. O cadastro de efetivo oferece atualização e exclusão com confirmação; a exclusão remove o cadastro da aba de efetivo, mas não apaga lançamentos históricos já registrados.
+- O painel oferece filtros por período, Companhia, Subdivisão, efetivo e tipo de ocorrência, dados detalhados, ranking, gráficos de distribuição e exportação em PDF.
+- Os PDFs de resumo e ranking incluem o título institucional e os indicadores filtrados de ocorrências, ocorrências por tipo, pontos e percentual de pontos.
+- O indicador `% Pontos` mostra a participação dos pontos filtrados no total geral. O ranking acumula ocorrências e pontos por policial, mesmo quando ele aparece em mais de uma Companhia ou Subdivisão.
+- A inclusão e a edição exigem senha administrativa. A lista de lançamentos permite pesquisar por data, equipe e tipo de OC, além de atualizar ou excluir cada lançamento com confirmação. O cadastro de efetivo também oferece atualização e exclusão; remover um policial não apaga lançamentos históricos.
 - O painel atualiza automaticamente em intervalos de 15 segundos, sem botão manual de atualização. Depois de uma gravação feita no próprio aplicativo, o painel é atualizado imediatamente.
 
 ## Organograma e responsividade (versão 3)
@@ -107,5 +109,12 @@ Esta versão corrige o erro `AttributeError: 'NoneType' object has no attribute 
 ## Atualização v5 — painel e indicadores
 
 A versão v5 apresenta a interface em letras maiúsculas, mantém a grafia UTF-8 com acentos, exibe pontos como números inteiros, formata percentuais com uma casa decimal (vírgula decimal), centraliza os cabeçalhos do painel e o rodapé institucional, remove a exportação CSV dos dados filtrados e conserva a exportação PDF. O painel apresenta três indicadores: Ocorrências, Ocorrências por tipo e Pontos das ocorrências.
+
+## Ajustes atuais do painel
+
+- O brasão fica centralizado na barra lateral; os filtros de período usam apenas `Data inicial` e `Data final`, aplicados aos dados exibidos.
+- O painel inclui `% Pontos` junto aos indicadores e acumula a pontuação do mesmo efetivo no ranking e no gráfico `Efetivo x Pontos`.
+- A tela administrativa lista os lançamentos com tipo de OC, pesquisa por data/equipe/tipo e ações de atualização e exclusão confirmada.
+- Ao abrir o app, a mensagem de carregamento é `Carregando Aplicativo`; o rodapé identifica o aplicativo sem citar o armazenamento.
 
 Para atualizar uma instalação existente, feche o Streamlit e substitua apenas `app.py`, `data_model.py` e `scoring.py` pela versão v5. Não substitua o arquivo `.streamlit/secrets.toml` nem `.streamlit/google-service-account.json`. Depois execute `3_TESTAR_GOOGLE_SHEETS.bat` e `2_INICIAR_APP.bat`.

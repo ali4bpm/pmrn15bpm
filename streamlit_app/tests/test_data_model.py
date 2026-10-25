@@ -1,4 +1,6 @@
-from data_model import build_frames, ranking_frame
+import pandas as pd
+
+from data_model import build_frames, percentage_of_total_points, ranking_frame
 from scoring import PTS_BASE
 
 
@@ -80,3 +82,72 @@ def test_points_are_integer_values_for_occurrence_and_individual_frames():
     assert int(facts.loc[0, "Pontos"]) == 12
     assert float(details.loc[0, "Pontos"]).is_integer()
     assert float(facts.loc[0, "Pontos"]).is_integer()
+
+
+def test_ranking_accumulates_points_for_same_person_across_companies():
+    details = pd.DataFrame(
+        [
+            {
+                "Efetivo": "CB PM LUNA",
+                "Companhia": "1ª CPM",
+                "Subdivisão": "DPM A",
+                "Qtde": 2,
+                "Pontos": 12,
+            },
+            {
+                "Efetivo": "CB PM LUNA",
+                "Companhia": "2ª CPM",
+                "Subdivisão": "DPM B",
+                "Qtde": 1,
+                "Pontos": 15,
+            },
+        ]
+    )
+
+    ranking = ranking_frame(details)
+
+    assert len(ranking) == 1
+    assert ranking.loc[0, "Efetivo"] == "CB PM LUNA"
+    assert ranking.loc[0, "Qtde"] == 3
+    assert ranking.loc[0, "Pontos"] == 27
+    assert ranking.loc[0, "Companhia"] == "Várias"
+    assert ranking.loc[0, "Subdivisão"] == "Várias"
+
+
+def test_percentage_of_total_points_uses_filtered_points_as_numerator():
+    all_facts = pd.DataFrame({"Pontos": [10, 30]})
+    filtered_facts = pd.DataFrame({"Pontos": [10]})
+
+    assert percentage_of_total_points(filtered_facts, all_facts) == 25
+
+
+def test_date_range_filters_details_and_facts_inclusively():
+    from datetime import date
+
+    from app import apply_filters
+
+    dates = [date(2026, 10, 1), date(2026, 10, 10), date(2026, 10, 31), date(2026, 11, 1)]
+    details = pd.DataFrame(
+        {
+            "ID": ["before", "start", "end", "after"],
+            "Data": dates,
+            "Companhia": ["C"] * 4,
+            "Subdivisão": ["D"] * 4,
+            "Tipo de OC": ["FURTO"] * 4,
+            "Efetivo": ["POLICIAL"] * 4,
+        }
+    )
+    facts = details.drop(columns="Efetivo")
+    filters = {
+        "start_date": date(2026, 10, 10),
+        "end_date": date(2026, 10, 31),
+        "company": "Todos",
+        "division": "Todos",
+        "types": [],
+        "people": [],
+    }
+
+    filtered_details, filtered_facts = apply_filters(details, facts, filters)
+
+    assert filtered_details["ID"].tolist() == ["start", "end"]
+    assert filtered_facts["ID"].tolist() == ["start", "end"]
