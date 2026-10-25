@@ -1160,7 +1160,7 @@ def main() -> None:
             st.markdown(f"<h1 class='main-title'>{APP_TITLE}</h1>", unsafe_allow_html=True)
             st.error(str(exc))
             st.markdown("### Como corrigir")
-            st.markdown("1. Siga as etapas de configuração do Google Cloud no `README.md` incluído no projeto.\n2. Salve o JSON da conta de serviço em `.streamlit/google-service-account.json`.\n3. Compartilhe a planilha com o e-mail `client_email` desse JSON como **Editor**.\n4. Confira `spreadsheet_id` e a senha em `.streamlit/secrets.toml` e reinicie a aplicação.")
+            st.markdown("1. Configure as credenciais da conta de serviço em `Settings > Secrets` no Streamlit Cloud, conforme o `README.md`.\n2. Localmente, salve o JSON em `.streamlit/google-service-account.json`.\n3. Compartilhe a planilha com o e-mail `client_email` da conta de serviço como **Editor**.\n4. Confira `google_sheets.spreadsheet_id`, configure a senha administrativa e reinicie o aplicativo.")
             st.stop()
         except Exception as exc:
             st.error(f"Falha inesperada ao abrir a planilha: {exc}")

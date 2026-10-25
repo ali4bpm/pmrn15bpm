@@ -53,12 +53,42 @@ def service_account_path() -> Path:
     return path
 
 
+def _service_account_info() -> dict[str, Any]:
+    try:
+        google_sheets = st.secrets.get("google_sheets", {})
+        info = google_sheets.get("service_account", {})
+    except Exception:
+        return {}
+    return dict(info) if info else {}
+
+
 def create_spreadsheet_client() -> gspread.Spreadsheet:
+    service_account_info = _service_account_info()
+    if service_account_info:
+        try:
+            gc = gspread.service_account_from_dict(service_account_info)
+            return gc.open_by_key(spreadsheet_id())
+        except Exception as exc:
+            message = str(exc)
+            if "403" in message or "permission" in message.lower() or "not have permission" in message.lower():
+                raise SheetsSetupError(
+                    "O Google negou o acesso à planilha. Compartilhe a planilha com o e-mail client_email "
+                    "configurado nos secrets como Editor e confirme que as APIs Google Sheets e Drive estão habilitadas."
+                ) from exc
+            if "404" in message or "not found" in message.lower():
+                raise SheetsSetupError(
+                    "Planilha não encontrada. Confira google_sheets.spreadsheet_id nos secrets do Streamlit."
+                ) from exc
+            raise SheetsSetupError(
+                f"Falha ao conectar usando as credenciais configuradas nos secrets do Streamlit: {message}"
+            ) from exc
+
     key_file = service_account_path()
     if not key_file.is_file():
         raise SheetsSetupError(
-            "Não encontrei o arquivo de credenciais do Google. Salve o JSON da conta de serviço como "
-            f"{DEFAULT_SERVICE_ACCOUNT.relative_to(APP_DIR).as_posix()} e siga o README."
+            "Credenciais do Google não configuradas. No Streamlit Cloud, adicione os dados da conta de serviço "
+            "em Settings > Secrets conforme o README. Para uso local, salve o JSON como "
+            f"{DEFAULT_SERVICE_ACCOUNT.relative_to(APP_DIR).as_posix()}."
         )
     try:
         gc = gspread.service_account(filename=str(key_file))

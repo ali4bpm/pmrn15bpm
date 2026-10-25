@@ -78,7 +78,37 @@ A API não consegue gravar dados apenas com o endereço de compartilhamento da p
    ```
 3. Salve. A senha administrativa é diferente da senha da conta Google. O arquivo `secrets.toml` está excluído do Git pela configuração `.gitignore`.
 
-## Parte 3 — instalar e iniciar no VS Code Insiders
+## Parte 3 — configurar deploy no Streamlit Community Cloud
+
+O JSON da conta de serviço não deve ser enviado ao GitHub. No app publicado, abra **Manage app → Settings → Secrets** e adicione as configurações abaixo. Copie os valores da chave JSON da conta de serviço diretamente para o editor de Secrets:
+
+```toml
+[google_sheets]
+spreadsheet_id = "1fuZYlIANUvqA0PpIhVENef_b9DMIGFhd4R_9M2Atjao"
+
+[google_sheets.service_account]
+type = "service_account"
+project_id = "SEU_PROJECT_ID"
+private_key_id = "SEU_PRIVATE_KEY_ID"
+private_key = """-----BEGIN PRIVATE KEY-----
+COLE_AQUI_A_CHAVE_PRIVADA_COMPLETA
+-----END PRIVATE KEY-----
+"""
+client_email = "SUA_CONTA_DE_SERVICO@SEU_PROJECT.iam.gserviceaccount.com"
+client_id = "SEU_CLIENT_ID"
+auth_uri = "https://accounts.google.com/o/oauth2/auth"
+token_uri = "https://oauth2.googleapis.com/token"
+auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
+client_x509_cert_url = "URL_DO_CERTIFICADO_DA_CONTA_DE_SERVICO"
+universe_domain = "googleapis.com"
+
+[admin]
+password = "DEFINA_UMA_SENHA_ADMINISTRATIVA_FORTE"
+```
+
+Substitua cada exemplo pelo valor correspondente do JSON original, sem alterar os nomes dos campos. Em `private_key`, cole toda a chave incluindo `BEGIN PRIVATE KEY` e `END PRIVATE KEY`, no formato multilinha mostrado. Salve os Secrets e reinicie/reimplante o app. Não cole a chave no chat, no código ou em um commit. O endereço `client_email` deve ter permissão de **Editor** na planilha. Essa configuração também mantém o `spreadsheet_id` e a senha administrativa protegidos nos Secrets.
+
+## Parte 4 — instalar e iniciar no VS Code Insiders
 
 1. Extraia o ZIP para uma pasta simples, por exemplo `C:\Projetos\15BPM_PMRN_GoogleSheets`.
 2. Abra essa pasta no VS Code Insiders em **File → Open Folder**.
