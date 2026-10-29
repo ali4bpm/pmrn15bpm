@@ -86,8 +86,11 @@ def inject_css() -> None:
         h2, h3 { color:#202936; }
         div[data-testid="stDataFrame"] { max-width:100%; }
         [data-testid="stTabs"] button { min-height:2.8rem; font-weight:600; }
-        #MainMenu, [data-testid="stToolbar"], [data-testid="stStatusWidget"],
-        .stAppDeployButton { display:none !important; }
+        #MainMenu, [data-testid="stStatusWidget"], .stAppDeployButton { display:none !important; }
+        [data-testid="stSidebarCollapseButton"], [data-testid="stSidebarCollapsedControl"] {
+          visibility:visible !important; opacity:1 !important; pointer-events:auto !important;
+          z-index:1000 !important;
+        }
         footer { visibility:hidden; }
 
         /* Layouts fluidos para tablets e telefones. As colunas passam a quebrar linhas,
