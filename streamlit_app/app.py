@@ -86,6 +86,8 @@ def inject_css() -> None:
         h2, h3 { color:#202936; }
         div[data-testid="stDataFrame"] { max-width:100%; }
         [data-testid="stTabs"] button { min-height:2.8rem; font-weight:600; }
+        #MainMenu, [data-testid="stToolbar"], [data-testid="stStatusWidget"],
+        .stAppDeployButton { display:none !important; }
         footer { visibility:hidden; }
 
         /* Layouts fluidos para tablets e telefones. As colunas passam a quebrar linhas,
