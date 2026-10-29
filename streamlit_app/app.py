@@ -86,10 +86,23 @@ def inject_css() -> None:
         h2, h3 { color:#202936; }
         div[data-testid="stDataFrame"] { max-width:100%; }
         [data-testid="stTabs"] button { min-height:2.8rem; font-weight:600; }
-        #MainMenu, [data-testid="stStatusWidget"], .stAppDeployButton { display:none !important; }
+        #MainMenu, [data-testid="stStatusWidget"], .stAppDeployButton,
+        [data-testid="stToolbar"] [data-testid="stToolbarActionButton"] {
+          display:none !important;
+        }
         [data-testid="stSidebarCollapseButton"], [data-testid="stSidebarCollapsedControl"] {
           visibility:visible !important; opacity:1 !important; pointer-events:auto !important;
           z-index:1000 !important;
+        }
+        [data-testid="stSidebarCollapsedControl"] {
+          position:fixed !important; top:.75rem !important; left:.75rem !important;
+          right:auto !important; bottom:auto !important; z-index:1001 !important;
+          background:#fffefd !important; border:1px solid #d5d0c4 !important;
+          border-radius:8px !important; box-shadow:0 2px 8px rgb(32 41 54 / 16%) !important;
+        }
+        [data-testid="stSidebarCollapsedControl"] button {
+          min-width:2.75rem !important; min-height:2.75rem !important;
+          color:#202936 !important; background:transparent !important; border:0 !important;
         }
         footer { visibility:hidden; }
 
