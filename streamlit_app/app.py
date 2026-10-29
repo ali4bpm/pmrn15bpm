@@ -87,7 +87,6 @@ def inject_css() -> None:
         div[data-testid="stDataFrame"] { max-width:100%; }
         [data-testid="stTabs"] button { min-height:2.8rem; font-weight:600; }
         #MainMenu, [data-testid="stStatusWidget"], .stAppDeployButton { display:none !important; }
-        [data-testid="stToolbar"] { visibility:hidden !important; }
         [data-testid="stSidebarCollapseButton"], [data-testid="stSidebarCollapsedControl"] {
           visibility:visible !important; opacity:1 !important; pointer-events:auto !important;
           z-index:1000 !important;
