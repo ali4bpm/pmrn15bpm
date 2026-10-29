@@ -13,9 +13,9 @@ OCORRENCIAS_BASE: list[tuple[str, int]] = [
     ("REVÓLVER", 30),
     ("RIFLE", 35),
     ("SIMULACRO", 6),
-    ("ENTORPECENTE De 1g a 500g - Peso 1 (Duas ou mais Ocorrências no mesmo dia até o total contará como pontuação subsequente)", 15),
-    ("ENTORPECENTE De 500g a 2kg - Peso 2 (Duas ou mais Ocorrências no mesmo dia até o total contará como pontuação subsequente)", 20),
-    ("ENTORPECENTE De 2kg a 10kg - Peso 3 (Duas ou mais Ocorrências no mesmo dia até o total contará como pontuação subsequente)", 30),
+    ("ENTORPECENTE De 1g a 500g - Peso 1", 15),
+    ("ENTORPECENTE De 500g a 2kg - Peso 2", 20),
+    ("ENTORPECENTE De 2kg a 10kg - Peso 3", 30),
     ("ENTORPECENTE Acima de 10kg - Peso 4", 50),
     ("ARROMBAMENTO", 6),
     ("ESTELIONATO", 7),
@@ -34,7 +34,6 @@ OCORRENCIAS_BASE: list[tuple[str, int]] = [
     ("TCO/BOC DELEGACIA", 3),
     ("BOPPM (Oc's como: Isolamento local de crime, ameaça, perturbação sossego alheio, etc..)", 3),
     ("VIOLÊNCIA DOMÉSTICA", 5),
-    ("ESTUPRO (Com flagrante, vítima, acusado e materialidade)", 30),
     ("HOMICÍDIO COM PRISÃO EM FLAGRANTE (Apenas para homicídios consumados)", 50),
 ]
 PTS_BASE: dict[str, int] = dict(OCORRENCIAS_BASE)
